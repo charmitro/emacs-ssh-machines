@@ -2,6 +2,8 @@
 ;;; Commentary:
 ;;; Code:
 
+(require 'cl-seq)
+
 (defvar ssh-machines-list
   '()
   "List of SSH machines. Format: (NAME ADDRESS NOTES).")
@@ -17,13 +19,13 @@
   (message "Added %s to SSH machines list" name))
 
 (defun remove-ssh-machine ()
-  "Remove an new SSH machine from the list."
+  "Remove an SSH machine from the list."
   (interactive)
   (let ((machine-name (completing-read "Remove machine: " (mapcar 'car ssh-machines-list))))
-    (setq ssh-machines-list (remove-if (lambda (machine) (string= (car machine) machine-name)) ssh-machines-list))
+    (setq ssh-machines-list (cl-remove-if (lambda (machine) (string= (car machine) machine-name)) ssh-machines-list))
     (with-temp-file "~/.emacs.d/ssh-machines.el"
       (insert "(setq ssh-machines-list '")
-      (prin1 ssh-machine-list (current-buffer))
+      (prin1 ssh-machines-list (current-buffer))
       (insert ")"))
     (message "Removed %s from SSH machines list" machine-name)))
 
