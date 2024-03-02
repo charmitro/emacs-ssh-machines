@@ -52,7 +52,7 @@ Contributions are welcome! If you'd like to contribute, please fork the reposito
 
 ## License
 
-This project is licensed under the  GPL-3.0 License - see the LICENSE.md file for details.
+This project is licensed under the  GPL-3.0 License - see the LICENSE file for details.
 
 ## Acknowledgments
 
