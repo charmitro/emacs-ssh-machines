@@ -36,7 +36,7 @@
 	 (selected-name (completing-read "Select machine: " machine-names))
 	 (machine-info (assoc selected-name ssh-machines-list)))
     (when machine-info
-      (let ((address (nth 1 machine-info)))
+      (pcase-let ((`(,_ ,address ,_) machine-info))
 	(ansi-term (concat "ssh " address))))))
 
 (defun list-ssh-machines ()
@@ -45,7 +45,8 @@
   (with-current-buffer (get-buffer-create "SSH Machines*")
     (erase-buffer)
     (dolist (machine ssh-machines-list)
-      (insert (format "%s - %s: %s\n" (car machine) (nth 2 machine) (nth 1 machine))))
+      (pcase-let ((`(,name ,address ,desc) machine))
+        (insert (format "%s - %s: %s\n" name desc address))))
     (switch-to-buffer (current-buffer))))
 
 (when (file-exists-p "~/.emacs.d/ssh-machines.el")
