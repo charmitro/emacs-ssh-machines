@@ -4,37 +4,36 @@
 
 (require 'cl-seq)
 
-(defvar ssh-machines-list
+(define-multisession-variable ssh-machines-list
   '()
   "List of SSH machines. Format: (NAME ADDRESS NOTES).")
 
 (defun add-ssh-machine (name address notes)
-  "Add a new SSH machine to the list in the format of NAME, ADDRESS, NOTES."
+  "Add a new SSH machine to the list in the format of (NAME, ADDRESS, NOTES)."
   (interactive "sName: \nsAddress: \nsNotes: ")
-  (add-to-list 'ssh-machines-list (list name address notes))
-  (with-temp-file "~/.emacs.d/ssh-machines.el"
-    (insert "(setq ssh-machines-list '")
-    (prin1 ssh-machines-list (current-buffer))
-    (insert ")"))
+  (setf (multisession-value ssh-machines-list)
+        (append (multisession-value ssh-machines-list) (list (list name address notes))))
   (message "Added %s to SSH machines list" name))
 
 (defun remove-ssh-machine ()
-  "Remove an SSH machine from the list."
+  "Remove an SSH machine from the list by selecting from a prompted list."
   (interactive)
-  (let ((machine-name (completing-read "Remove machine: " (mapcar 'car ssh-machines-list))))
-    (setq ssh-machines-list (cl-remove-if (lambda (machine) (string= (car machine) machine-name)) ssh-machines-list))
-    (with-temp-file "~/.emacs.d/ssh-machines.el"
-      (insert "(setq ssh-machines-list '")
-      (prin1 ssh-machines-list (current-buffer))
-      (insert ")"))
-    (message "Removed %s from SSH machines list" machine-name)))
+  (let* ((machine-names (mapcar (lambda (machine) (car machine)) (multisession-value ssh-machines-list)))
+         (selected-name (completing-read "Select SSH machine to remove: " machine-names)))
+    (when selected-name
+      (let* ((current-list (multisession-value ssh-machines-list))
+             (filtered-list (remove-if (lambda (machine)
+                                         (string= selected-name (first machine)))
+                                       current-list)))
+        (setf (multisession-value ssh-machines-list) filtered-list)
+        (message "Removed %s from SSH machines list" selected-name)))))
 
 (defun ssh-connect ()
   "Connect to a machine via SSH."
   (interactive)
-  (let* ((machine-names (mapcar #'car ssh-machines-list))
+  (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
 	 (selected-name (completing-read "Select machine: " machine-names))
-	 (machine-info (assoc selected-name ssh-machines-list)))
+	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
       (pcase-let ((`(,_ ,address ,_) machine-info))
 	(ansi-term (concat "ssh " address))))))
@@ -44,13 +43,10 @@
   (interactive)
   (with-current-buffer (get-buffer-create "SSH Machines*")
     (erase-buffer)
-    (dolist (machine ssh-machines-list)
+    (dolist (machine (multisession-value ssh-machines-list))
       (pcase-let ((`(,name ,address ,desc) machine))
         (insert (format "%s - %s: %s\n" name desc address))))
     (switch-to-buffer (current-buffer))))
-
-(when (file-exists-p "~/.emacs.d/ssh-machines.el")
-  (load "~/.emacs.d/ssh-machines.el"))
 
 (provide 'init-ssh)
 
