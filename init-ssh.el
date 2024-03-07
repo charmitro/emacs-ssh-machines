@@ -22,7 +22,7 @@
          (selected-name (completing-read "Select SSH machine to remove: " machine-names)))
     (when selected-name
       (let* ((current-list (multisession-value ssh-machines-list))
-             (filtered-list (remove-if (lambda (machine)
+             (filtered-list (cl-remove-if (lambda (machine)
                                          (string= selected-name (first machine)))
                                        current-list)))
         (setf (multisession-value ssh-machines-list) filtered-list)
@@ -47,6 +47,20 @@
       (pcase-let ((`(,name ,address ,desc) machine))
         (insert (format "%s - %s: %s\n" name desc address))))
     (switch-to-buffer (current-buffer))))
+
+(defun export-ssh-machines (file-path)
+  "Export the list of SSH Machines to a specified FILE-PATH."
+  (interactive "FExport to file: ")
+  (with-temp-file file-path
+    (prin1 `(setq ssh-machines-list ',(multisession-value ssh-machines-list)) (current-buffer))
+    (message "Exported SSH machines to %s" file-path)))
+
+(defun import-ssh-machines (file-path)
+  "Import a list of SSH machines from a specified FILE-PATH."
+  (interactive "fImport from file: ")
+  (load-file file-path)
+  (message "Imported SSH machines from %s" file-path))
+
 
 (provide 'init-ssh)
 
