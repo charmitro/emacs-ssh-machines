@@ -61,6 +61,18 @@
   (load-file file-path)
   (message "Imported SSH machines from %s" file-path))
 
+(defun copy-file-to-ssh-machine (file-path)
+  "Copy a file from the host machine to a selected remote SSH machine."
+  (interactive "fFile to copy: ")
+  (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
+	 (selected-name (completing-read "Select target machine: " machine-names))
+	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
+    (when machine-info
+      (pcase-let ((`(,_,address ,_) machine-info))
+	(let ((remote-path (read-string "Remote destination path: ")))
+	  (shell-command (format "scp %s %s:%s" file-path address remote-path))
+	  (message "File %s copied to %s:%s" file-path address remote-path))))))
+
 
 (provide 'init-ssh)
 

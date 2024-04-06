@@ -10,6 +10,7 @@ The Emacs SSH Machines Management Tool is designed to simplify the management of
 - **Remove SSH Machines:** This feature allows for the removal of SSH machines from the list, keeping the configuration clean and up-to-date.
 - **List SSH Machines:** Displays a neatly formatted list of all configured SSH machines in an Emacs buffer, providing a quick overview of available connections.
 - **Connect to SSH Machines:** Enables users to connect to a selected SSH machine using the SSH protocol directly from Emacs, facilitating seamless remote work.
+- **Copy Files to remote:** Users can easily copy files from their local machine to the remote machine.
 
 ## Installation
 
@@ -47,6 +48,10 @@ To view all configured SSH machines, use `M-x list-ssh-machines`. This will disp
 ### Connecting to an SSH Machine
 
 Use `M-x ssh-connect` and select the desired SSH machine to establish an SSH connection.
+
+### Copying a file to an SSH Machine
+
+To copy a file from your local machine to the remote one, use `M-x copy-file-to-ssh-machine`. You will be prompted to select the file to copy, the target machin, and the remote destination path.
 
 ## Configuration
 
