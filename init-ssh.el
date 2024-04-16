@@ -4,6 +4,11 @@
 
 (require 'cl-seq)
 
+(defcustom ssh-copy-method 'scp
+  "Method to use for copying files to remote machines. Can be either 'scp or 'rsync."
+  :type '(choice (const scp) (const rsync))
+  :group 'ssh-machines)
+
 (define-multisession-variable ssh-machines-list
   '()
   "List of SSH machines. Format: (NAME ADDRESS NOTES).")
@@ -12,21 +17,21 @@
   "Add a new SSH machine to the list in the format of (NAME, ADDRESS, NOTES)."
   (interactive "sName: \nsAddress: \nsNotes: ")
   (setf (multisession-value ssh-machines-list)
-        (append (multisession-value ssh-machines-list) (list (list name address notes))))
+	(append (multisession-value ssh-machines-list) (list (list name address notes))))
   (message "Added %s to SSH machines list" name))
 
 (defun remove-ssh-machine ()
   "Remove an SSH machine from the list by selecting from a prompted list."
   (interactive)
   (let* ((machine-names (mapcar (lambda (machine) (car machine)) (multisession-value ssh-machines-list)))
-         (selected-name (completing-read "Select SSH machine to remove: " machine-names)))
+	 (selected-name (completing-read "Select SSH machine to remove: " machine-names)))
     (when selected-name
       (let* ((current-list (multisession-value ssh-machines-list))
-             (filtered-list (cl-remove-if (lambda (machine)
-                                         (string= selected-name (first machine)))
-                                       current-list)))
-        (setf (multisession-value ssh-machines-list) filtered-list)
-        (message "Removed %s from SSH machines list" selected-name)))))
+	     (filtered-list (cl-remove-if (lambda (machine)
+					    (string= selected-name (first machine)))
+					  current-list)))
+	(setf (multisession-value ssh-machines-list) filtered-list)
+	(message "Removed %s from SSH machines list" selected-name)))))
 
 (defun ssh-connect ()
   "Connect to a machine via SSH."
@@ -45,7 +50,7 @@
     (erase-buffer)
     (dolist (machine (multisession-value ssh-machines-list))
       (pcase-let ((`(,name ,address ,desc) machine))
-        (insert (format "%s - %s: %s\n" name desc address))))
+	(insert (format "%s - %s: %s\n" name desc address))))
     (switch-to-buffer (current-buffer))))
 
 (defun export-ssh-machines (file-path)
@@ -70,9 +75,13 @@
     (when machine-info
       (pcase-let ((`(,_,address ,_) machine-info))
 	(let ((remote-path (read-string "Remote destination path: ")))
-	  (shell-command (format "scp %s %s:%s" file-path address remote-path))
-	  (message "File %s copied to %s:%s" file-path address remote-path))))))
-
+	  (cl-case ssh-copy-method
+	    (scp
+	     (shell-command (format "scp %s %s:%s via scp" file-path address remote-path))
+	     (message "File %s copied to %s:%s" file-path address remote-path))
+	    (rsync
+	     (shell-command (format "rsync %s %s:%s" file-path address remote-path))
+	     (message "File %s copied to %s:%s via rsync" file-path address remote-path))))))))
 
 (provide 'init-ssh)
 
