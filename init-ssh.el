@@ -4,19 +4,25 @@
 
 (require 'cl-seq)
 
-(defcustom ssh-copy-method 'scp
-  "Method to use for copying files to remote machines.  Can be either 'scp or 'rsync."
-  :type '(choice (const scp) (const rsync))
-  :group 'ssh-machines)
+(defvar ssh-machines-list
+  (multisession-make '())
+  "A list of SSH machines to connect to.
+Each element is a list (NAME ADDRESS DESCRIPTION [KEY-FILE]).
+NAME is the name of the machine.
+ADDRESS is the SSH address of the machine.
+DESCRIPTION is a short description of the machine.
+Optional KEY-FILE is the filename of an SSH key to use.")
 
 (defcustom ssh-keys-directory "~/.ssh/"
   "Directory where SSH keys are stored."
   :type 'directory
   :group 'ssh-machines)
 
-(define-multisession-variable ssh-machines-list
-  '()
-  "List of SSH machines. Format: (NAME ADDRESS NOTES).")
+(defcustom ssh-copy-method 'scp
+  "Method to use for copying files to remote machines.
+Possible values are `scp' or `rsync'."
+  :type '(choice (const scp) (const rsync))
+  :group 'ssh-machines)
 
 (defun add-ssh-machine (name address notes)
   "Add a new SSH machine to the list in the format of (NAME, ADDRESS, NOTES)."
@@ -75,7 +81,9 @@
   (message "Imported SSH machines from %s" file-path))
 
 (defun copy-file-to-ssh-machine (file-path)
-  "Copy a file via FILE-PATH from the host machine to a selected remote SSH machine."
+  "Copy a file (FILE-PATH) from the host machine to a selected remote SSH machine.
+The user will be prompted to select the target machine and specify the remote
+destination path."
   (interactive "fFile to copy: ")
   (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
 	 (selected-name (completing-read "Select target machine: " machine-names))
@@ -148,7 +156,8 @@ KEY-COMMENT is typically your email address for identification."
 	(async-shell-command command "*SSH Key Generation*")))))
 
 (defun ssh-copy-key (key-file)
-  "Copy an SSH public key (KEY-FILE) to a remote machine."
+  "Copy an SSH public key (KEY-FILE) to a remote machine.
+Use \='ssh-copy-id\=' internally."
   (interactive
    (list (completing-read "Select key to copy: "
 			  (cl-remove-if
