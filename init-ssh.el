@@ -5,7 +5,7 @@
 (require 'cl-seq)
 
 (defcustom ssh-copy-method 'scp
-  "Method to use for copying files to remote machines. Can be either 'scp or 'rsync."
+  "Method to use for copying files to remote machines.  Can be either 'scp or 'rsync."
   :type '(choice (const scp) (const rsync))
   :group 'ssh-machines)
 
@@ -75,7 +75,7 @@
   (message "Imported SSH machines from %s" file-path))
 
 (defun copy-file-to-ssh-machine (file-path)
-  "Copy a file from the host machine to a selected remote SSH machine."
+  "Copy a file via FILE-PATH from the host machine to a selected remote SSH machine."
   (interactive "fFile to copy: ")
   (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
 	 (selected-name (completing-read "Select target machine: " machine-names))
@@ -148,7 +148,7 @@ KEY-COMMENT is typically your email address for identification."
 	(async-shell-command command "*SSH Key Generation*")))))
 
 (defun ssh-copy-key (key-file)
-  "Copy an SSH public key to a remote machine."
+  "Copy an SSH public key (KEY-FILE) to a remote machine."
   (interactive
    (list (completing-read "Select key to copy: "
 			  (cl-remove-if
