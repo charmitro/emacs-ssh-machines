@@ -9,6 +9,11 @@
   :type '(choice (const scp) (const rsync))
   :group 'ssh-machines)
 
+(defcustom ssh-keys-directory "~/.ssh/"
+  "Directory where SSH keys are stored."
+  :type 'directory
+  :group 'ssh-machines)
+
 (define-multisession-variable ssh-machines-list
   '()
   "List of SSH machines. Format: (NAME ADDRESS NOTES).")
@@ -34,14 +39,17 @@
 	(message "Removed %s from SSH machines list" selected-name)))))
 
 (defun ssh-connect ()
-  "Connect to a machine via SSH."
+  "Connect to a machine via SSH, using associated key if available."
   (interactive)
   (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
 	 (selected-name (completing-read "Select machine: " machine-names))
 	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
-      (pcase-let ((`(,_ ,address ,_) machine-info))
-	(ansi-term (concat "ssh " address))))))
+      (pcase-let ((`(,_ ,address ,_ . ,rest) machine-info))
+	(let ((key-option (if (car rest)
+			      (format " -i %s" (expand-file-name (car rest) ssh-keys-directory))
+			    "")))
+	  (ansi-term (concat "ssh" key-option " " address)))))))
 
 (defun list-ssh-machines ()
   "List all SSH machines in a new buffer."
@@ -82,6 +90,106 @@
 	    (rsync
 	     (shell-command (format "rsync %s %s:%s" file-path address remote-path))
 	     (message "File %s copied to %s:%s via rsync" file-path address remote-path))))))))
+
+(defun ssh-list-keys ()
+  "List all SSH keys in the SSH keys directory."
+  (interactive)
+  (let ((keys-buffer (get-buffer-create "*SSH Keys*"))
+	(key-files (directory-files ssh-keys-directory nil "^id_.*$")))
+    (with-current-buffer keys-buffer
+      (erase-buffer)
+      (if key-files
+	  (progn
+	    (insert "Available SSH Keys:\n\n")
+	    (dolist (key-file key-files)
+	      (unless (string-match-p "\\.pub$" key-file)
+		(let ((pub-file (concat key-file ".pub")))
+		  (insert (format "• %s" key-file))
+		  (when (file-exists-p (expand-file-name pub-file ssh-keys-directory))
+		    (insert " (with public key)")
+		    (let ((key-comment (ssh-get-key-comment pub-file)))
+		      (when key-comment
+			(insert (format " - %s" key-comment)))))
+		  (insert "\n")))))
+	(insert "No SSH keys found in " ssh-keys-directory "\n"))
+      (insert "\nUse M-x ssh-generate-key to create a new key pair.\n")
+      (insert "Use M-x ssh-copy-key to copy a key to a remote server.\n")
+      (special-mode)
+      (switch-to-buffer (current-buffer)))))
+
+(defun ssh-get-key-comment (pub-key-file)
+  "Extract comment from SSH public key file PUB-KEY-FILE."
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name pub-key-file ssh-keys-directory))
+    (when (re-search-forward "\\([^ ]+\\)$" nil t)
+      (match-string 1))))
+
+(defun ssh-generate-key (key-type key-name key-comment)
+  "Generate a new SSH key pair.
+KEY-TYPE is the type of key (e.g., 'rsa', 'ed25519').
+KEY-NAME is the filename for the key.
+KEY-COMMENT is typically your email address for identification."
+  (interactive
+   (list (completing-read "Key type: " '("rsa" "ed25519" "ecdsa" "dsa") nil t "ed25519")
+	 (read-string "Key name (e.g., id_github): " "id_")
+	 (read-string "Key comment (typically email): ")))
+  (let ((key-path (expand-file-name key-name ssh-keys-directory))
+	(bits (when (string= key-type "rsa")
+		(read-string "Key bits (2048, 4096): " "4096"))))
+    (make-directory ssh-keys-directory t)
+    (if (file-exists-p key-path)
+	(user-error "Key with name %s already exists" key-name)
+      (let ((command (format "ssh-keygen -t %s%s -f %s -C \"%s\" -N \"\""
+			     key-type
+			     (if (string= key-type "rsa") (format " -b %s" bits) "")
+			     key-path
+			     key-comment)))
+	(message "Generating key with command: %s" command)
+	(async-shell-command command "*SSH Key Generation*")))))
+
+(defun ssh-copy-key (key-file)
+  "Copy an SSH public key to a remote machine."
+  (interactive
+   (list (completing-read "Select key to copy: "
+			  (cl-remove-if
+			   (lambda (file) (string-match-p "\\.pub$" file))
+			   (directory-files ssh-keys-directory nil "^id_.*$"))
+			  nil t)))
+  (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
+	 (selected-name (completing-read "Select target machine: " machine-names))
+	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
+    (when machine-info
+      (pcase-let ((`(,_ ,address ,_) machine-info))
+	(let ((key-path (expand-file-name (concat key-file ".pub") ssh-keys-directory)))
+	  (if (file-exists-p key-path)
+	      (async-shell-command
+	       (format "ssh-copy-id -i %s %s" key-path address)
+	       "*SSH Copy ID*")
+	    (user-error "Public key file %s does not exist" key-path)))))))
+
+(defun ssh-associate-key-with-machine ()
+  "Associate an SSH key with a specific machine in the list."
+  (interactive)
+  (let* ((machine-names (mapcar #'car (multisession-value ssh-machines-list)))
+	 (selected-name (completing-read "Select machine: " machine-names))
+	 (machine-info (assoc selected-name (multisession-value ssh-machines-list)))
+	 (key-files (cl-remove-if
+		     (lambda (file) (string-match-p "\\.pub$" file))
+		     (directory-files ssh-keys-directory nil "^id_.*$")))
+	 (selected-key (completing-read "Select key to associate: " key-files)))
+    (when (and machine-info selected-key)
+      (let* ((current-list (multisession-value ssh-machines-list))
+	     (updated-machine (list (car machine-info)
+				    (cadr machine-info)
+				    (caddr machine-info)
+				    selected-key))
+	     (updated-list (mapcar (lambda (m)
+				     (if (string= (car m) selected-name)
+					 updated-machine
+				       m))
+				   current-list)))
+	(setf (multisession-value ssh-machines-list) updated-list)
+	(message "Associated %s with machine %s" selected-key selected-name)))))
 
 (provide 'init-ssh)
 

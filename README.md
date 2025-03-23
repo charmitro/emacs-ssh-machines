@@ -11,6 +11,7 @@ The Emacs SSH Machines Management Tool is designed to simplify the management of
 - **List SSH Machines:** Displays a neatly formatted list of all configured SSH machines in an Emacs buffer, providing a quick overview of available connections.
 - **Connect to SSH Machines:** Enables users to connect to a selected SSH machine using the SSH protocol directly from Emacs, facilitating seamless remote work.
 - **Copy Files to remote:** Users can easily copy files from their local machine to the remote machine.
+- **SSH Key Management:** Manage your SSH keys directly from Emacs, including viewing, generating, and associating keys with specific servers.
 
 ## Installation
 
@@ -52,6 +53,33 @@ Use `M-x ssh-connect` and select the desired SSH machine to establish an SSH con
 ### Copying a file to an SSH Machine
 
 To copy a file from your local machine to the remote one, use `M-x copy-file-to-ssh-machine`. You will be prompted to select the file to copy, the target machin, and the remote destination path.
+
+### Managing SSH Keys
+
+The SSH Machines Management Tool now includes comprehensive SSH key management features:
+
+#### Viewing SSH Keys
+
+Use `M-x ssh-list-keys` to display all your SSH keys in a buffer. This will show:
+- The names of your key files
+- Whether each key has a corresponding public key
+- Associated comments (typically email addresses)
+
+#### Generating SSH Keys
+
+Execute `M-x ssh-generate-key` to create a new SSH key pair. You will be prompted for:
+- Key type (RSA, Ed25519, ECDSA, or DSA)
+- Key name (filename)
+- Key comment (typically your email address)
+- For RSA keys, you can specify the bit length (2048 or 4096)
+
+#### Copying SSH Keys to Remote Servers
+
+Use `M-x ssh-copy-key` to copy a public key to a remote server. This simplifies the process of setting up key-based authentication.
+
+#### Associating Keys with Specific Servers
+
+Execute `M-x ssh-associate-key-with-machine` to link a specific SSH key with a server in your machines list. When you connect to this server using `M-x ssh-connect`, the associated key will be used automatically.
 
 ## Configuration
 
