@@ -93,7 +93,7 @@ destination path."
 	(let ((remote-path (read-string "Remote destination path: ")))
 	  (cl-case ssh-copy-method
 	    (scp
-	     (shell-command (format "scp %s %s:%s via scp" file-path address remote-path))
+	     (shell-command (format "scp %s %s:%s" file-path address remote-path))
 	     (message "File %s copied to %s:%s" file-path address remote-path))
 	    (rsync
 	     (shell-command (format "rsync %s %s:%s" file-path address remote-path))
