@@ -3,14 +3,14 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'multisession)
 
 (defgroup ssh-machines nil
   "SSH machines management."
   :group 'tools
   :prefix "ssh-")
 
-(defvar ssh-machines-list
-  (multisession-make '())
+(define-multisession-variable ssh-machines-list '()
   "A list of SSH machines to connect to.
 Each element is a list (NAME ADDRESS DESCRIPTION [KEY-FILE]).
 NAME is the name of the machine.
