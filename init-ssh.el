@@ -29,11 +29,11 @@ Possible values are `scp' or `rsync'."
   :type '(choice (const scp) (const rsync))
   :group 'ssh-machines)
 
-(defun add-ssh-machine (name address notes)
+(defun add-ssh-machine (name address port notes)
   "Add a new SSH machine to the list in the format of (NAME, ADDRESS, NOTES)."
-  (interactive "sName: \nsAddress: \nsNotes: ")
+  (interactive "sName: \nsAddress: \nsNotes: \nsPort: ")
   (setf (multisession-value ssh-machines-list)
-	(append (multisession-value ssh-machines-list) (list (list name address notes))))
+	(append (multisession-value ssh-machines-list) (list (list name address port notes))))
   (message "Added %s to SSH machines list" name))
 
 (defun remove-ssh-machine ()
@@ -60,12 +60,12 @@ Possible values are `scp' or `rsync'."
 	 (selected-name (completing-read "Select machine: " machine-names))
 	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
-      (pcase-let ((`(,_ ,address ,_ . ,rest) machine-info))
+      (pcase-let ((`(,_ ,address ,_ ,port . ,rest) machine-info))
 	(let ((key-option (if (car rest)
 			      (format " -i %s" (shell-quote-argument
 						(expand-file-name (car rest) ssh-keys-directory)))
 			    "")))
-	  (ansi-term (concat "ssh" key-option " " address)))))))
+	  (ansi-term (concat "ssh" key-option " " address " " "-p" port)))))))
 
 (defvar ssh-machines-mode-map
   (let ((map (make-sparse-keymap)))
@@ -87,6 +87,7 @@ Possible values are `scp' or `rsync'."
   (setq tabulated-list-format [("Name" 15 t)
                                ("Address" 30 t)
                                ("Description" 25 t)
+                               ("Port" 15 t)
                                ("Key" 15 t)])
   (setq tabulated-list-padding 2)
   (tabulated-list-init-header))
@@ -94,10 +95,11 @@ Possible values are `scp' or `rsync'."
 (defun ssh-machines--get-entries ()
   "Return entries for `tabulated-list-entries'."
   (mapcar (lambda (machine)
-            (pcase-let ((`(,name ,address ,desc . ,rest) machine))
+            (pcase-let ((`(,name ,address ,desc ,port . ,rest) machine))
               (list name (vector name
                                  address
                                  (or desc "")
+                                 (or port "")
                                  (or (car rest) "")))))
           (multisession-value ssh-machines-list)))
 
