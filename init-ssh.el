@@ -12,9 +12,10 @@
 
 (define-multisession-variable ssh-machines-list '()
   "A list of SSH machines to connect to.
-Each element is a list (NAME ADDRESS DESCRIPTION [KEY-FILE]).
+Each element is a list (NAME ADDRESS PORT DESCRIPTION [KEY-FILE]).
 NAME is the name of the machine.
 ADDRESS is the SSH address of the machine.
+PORT is the open ssh port of the machine.
 DESCRIPTION is a short description of the machine.
 Optional KEY-FILE is the filename of an SSH key to use.")
 
@@ -29,11 +30,21 @@ Possible values are `scp' or `rsync'."
   :type '(choice (const scp) (const rsync))
   :group 'ssh-machines)
 
+(defun validate-port (port)
+  "Validates PORT, Return default (22) if Invalid. Return PORT if valid."
+  (let ((port-digit (ignore-errors (cl-parse-integer port))))
+    (cond
+     ((and port-digit (< port-digit 65535) (> port-digit 0)) port)
+     (t "22"))))
+;;TODO backward compatibiliy for port-less
+;;use validate-port
+
 (defun add-ssh-machine (name address port notes)
-  "Add a new SSH machine to the list in the format of (NAME, ADDRESS, .PORT. NOTES)."
+  "Add a new SSH machine to the list.
+The format is as such: (NAME ADDRESS PORT NOTES)."
   (interactive "sName: \nsAddress: \nsPort: \nsNotes: ")
   (setf (multisession-value ssh-machines-list)
-	(append (multisession-value ssh-machines-list) (list (list name address port notes))))
+	(append (multisession-value ssh-machines-list) (list (list name address (validate-port port) notes))))
   (message "Added %s to SSH machines list" name))
 
 (defun remove-ssh-machine ()
@@ -65,7 +76,7 @@ Possible values are `scp' or `rsync'."
 			      (format " -i %s" (shell-quote-argument
 						(expand-file-name (car rest) ssh-keys-directory)))
 			    "")))
-	  (ansi-term (concat "ssh" key-option " " address " " "-p" port)))))))
+	  (ansi-term (concat "ssh" key-option " " address " " "-p" (validate-port port))))))))
 
 (defvar ssh-machines-mode-map
   (let ((map (make-sparse-keymap)))
@@ -115,7 +126,7 @@ Possible values are `scp' or `rsync'."
                                   (format " -i %s" (shell-quote-argument
                                                     (expand-file-name (car rest) ssh-keys-directory)))
                                 "")))
-              (ansi-term (concat "ssh" key-option " " address "-p " port)))))))))
+              (ansi-term (concat "ssh" key-option " " address " " "-p " port)))))))))
 
 (defun ssh-machines-delete-at-point ()
   "Delete the SSH machine at point."
@@ -256,7 +267,7 @@ Skips wildcard patterns like Host * or Host *.example.com."
                (port current-port)
                (key-name (when current-key
                            (file-name-nondirectory current-key))))
-          (push (list current-host address port "Imported from SSH config" key-name) hosts))))
+          (push (list current-host address (validate-port port) "Imported from SSH config" key-name) hosts))))
     (nreverse hosts)))
 
 (defun import-from-ssh-config ()
@@ -300,14 +311,14 @@ destination path."
 	  (cl-case ssh-copy-method
 	    (scp
 	     (shell-command (format "scp -P %s %s %s:%s"
-                                    port
+                                    (validate-port port)
 				    (shell-quote-argument file-path)
 				    address
 				    (shell-quote-argument remote-path)))
 	     (message "File %s copied to %s:%s using port %s" file-path address remote-path port))
 	    (rsync
 	     (shell-command (format "rsync -e 'ssh -p %s' %s %s:%s"
-                                    port
+                                   (validate-port port)
 				    (shell-quote-argument file-path)
 				    address
 				    (shell-quote-argument remote-path)))
@@ -388,7 +399,7 @@ Use \='ssh-copy-id\=' internally."
 	(let ((key-path (expand-file-name (concat key-file ".pub") ssh-keys-directory)))
 	  (if (file-exists-p key-path)
 	      (async-shell-command
-	       (format "ssh-copy-id -p %s -i %s %s" port (shell-quote-argument key-path) address)
+	       (format "ssh-copy-id -p %s -i %s %s" (validate-port port) (shell-quote-argument key-path) address)
 	       "*SSH Copy ID*")
 	    (user-error "Public key file %s does not exist" key-path)))))))
 
