@@ -12,9 +12,10 @@
 
 (define-multisession-variable ssh-machines-list '()
   "A list of SSH machines to connect to.
-Each element is a list (NAME ADDRESS DESCRIPTION [KEY-FILE]).
+Each element is a list (NAME ADDRESS PORT DESCRIPTION [KEY-FILE]).
 NAME is the name of the machine.
 ADDRESS is the SSH address of the machine.
+PORT is the open ssh port of the machine.
 DESCRIPTION is a short description of the machine.
 Optional KEY-FILE is the filename of an SSH key to use.")
 
@@ -29,11 +30,21 @@ Possible values are `scp' or `rsync'."
   :type '(choice (const scp) (const rsync))
   :group 'ssh-machines)
 
-(defun add-ssh-machine (name address notes)
-  "Add a new SSH machine to the list in the format of (NAME, ADDRESS, NOTES)."
-  (interactive "sName: \nsAddress: \nsNotes: ")
+(defun validate-port (port)
+  "Validates PORT, Return default (22) if Invalid. Return PORT if valid."
+  (let ((port-digit (ignore-errors (cl-parse-integer port))))
+    (cond
+     ((and port-digit (< port-digit 65535) (> port-digit 0)) port)
+     (t "22"))))
+;;TODO backward compatibiliy for port-less
+;;use validate-port
+
+(defun add-ssh-machine (name address port notes)
+  "Add a new SSH machine to the list.
+The format is as such: (NAME ADDRESS PORT NOTES)."
+  (interactive "sName: \nsAddress: \nsPort: \nsNotes: ")
   (setf (multisession-value ssh-machines-list)
-	(append (multisession-value ssh-machines-list) (list (list name address notes))))
+	(append (multisession-value ssh-machines-list) (list (list name address (validate-port port) notes))))
   (message "Added %s to SSH machines list" name))
 
 (defun remove-ssh-machine ()
@@ -60,12 +71,12 @@ Possible values are `scp' or `rsync'."
 	 (selected-name (completing-read "Select machine: " machine-names))
 	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
-      (pcase-let ((`(,_ ,address ,_ . ,rest) machine-info))
+      (pcase-let ((`(,_ ,address ,port ,_ . ,rest) machine-info))
 	(let ((key-option (if (car rest)
 			      (format " -i %s" (shell-quote-argument
 						(expand-file-name (car rest) ssh-keys-directory)))
 			    "")))
-	  (ansi-term (concat "ssh" key-option " " address)))))))
+	  (ansi-term (concat "ssh" key-option " " address " " "-p" (validate-port port))))))))
 
 (defvar ssh-machines-mode-map
   (let ((map (make-sparse-keymap)))
@@ -86,6 +97,7 @@ Possible values are `scp' or `rsync'."
   :keymap ssh-machines-mode-map
   (setq tabulated-list-format [("Name" 15 t)
                                ("Address" 30 t)
+                               ("Port" 15 t)
                                ("Description" 25 t)
                                ("Key" 15 t)])
   (setq tabulated-list-padding 2)
@@ -94,9 +106,10 @@ Possible values are `scp' or `rsync'."
 (defun ssh-machines--get-entries ()
   "Return entries for `tabulated-list-entries'."
   (mapcar (lambda (machine)
-            (pcase-let ((`(,name ,address ,desc . ,rest) machine))
+            (pcase-let ((`(,name ,address ,port ,desc . ,rest) machine))
               (list name (vector name
                                  address
+                                 (or port "")
                                  (or desc "")
                                  (or (car rest) "")))))
           (multisession-value ssh-machines-list)))
@@ -108,12 +121,12 @@ Possible values are `scp' or `rsync'."
     (when name
       (let ((machine-info (assoc name (multisession-value ssh-machines-list))))
         (when machine-info
-          (pcase-let ((`(,_ ,address ,_ . ,rest) machine-info))
+          (pcase-let ((`(,_ ,address ,port ,_ . ,rest) machine-info))
             (let ((key-option (if (car rest)
                                   (format " -i %s" (shell-quote-argument
                                                     (expand-file-name (car rest) ssh-keys-directory)))
                                 "")))
-              (ansi-term (concat "ssh" key-option " " address)))))))))
+              (ansi-term (concat "ssh" key-option " " address " " "-p " port)))))))))
 
 (defun ssh-machines-delete-at-point ()
   "Delete the SSH machine at point."
@@ -134,14 +147,15 @@ Possible values are `scp' or `rsync'."
     (when name
       (let ((machine-info (assoc name (multisession-value ssh-machines-list))))
         (when machine-info
-          (pcase-let ((`(,old-name ,old-address ,old-desc . ,rest) machine-info))
+          (pcase-let ((`(,old-name ,old-address ,old-port ,old-desc . ,rest) machine-info))
             (let* ((new-name (read-string "Name: " old-name))
                    (new-address (read-string "Address: " old-address))
+                   (new-port (read-string "Port: " old-port))
                    (new-desc (read-string "Description: " old-desc))
                    (key-file (car rest))
                    (updated-machine (if key-file
-                                        (list new-name new-address new-desc key-file)
-                                      (list new-name new-address new-desc)))
+                                        (list new-name new-address new-port new-desc key-file)
+                                      (list new-name new-address new-port new-desc)))
                    (updated-list (mapcar (lambda (m)
                                            (if (string= (car m) old-name)
                                                updated-machine
@@ -160,14 +174,15 @@ Possible values are `scp' or `rsync'."
          (selected-name (completing-read "Select machine to edit: " machine-names nil t))
          (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
-      (pcase-let ((`(,old-name ,old-address ,old-desc . ,rest) machine-info))
+      (pcase-let ((`(,old-name ,old-address ,old-port ,old-desc . ,rest) machine-info))
         (let* ((new-name (read-string "Name: " old-name))
                (new-address (read-string "Address: " old-address))
+               (new-port (read-string "Port: " old-port))
                (new-desc (read-string "Description: " old-desc))
                (key-file (car rest))
                (updated-machine (if key-file
-                                    (list new-name new-address new-desc key-file)
-                                  (list new-name new-address new-desc)))
+                                    (list new-name new-address new-port new-desc key-file)
+                                  (list new-name new-address new-port new-desc)))
                (updated-list (mapcar (lambda (m)
                                        (if (string= (car m) old-name)
                                            updated-machine
@@ -202,12 +217,13 @@ Possible values are `scp' or `rsync'."
   (message "Imported SSH machines from %s" file-path))
 
 (defun ssh-parse-config-file (config-file)
-  "Parse CONFIG-FILE and return list of (name address desc key) entries.
+  "Parse CONFIG-FILE and return list of (name address port desc key) entries.
 Skips wildcard patterns like Host * or Host *.example.com."
   (let ((hosts '())
         (current-host nil)
         (current-hostname nil)
         (current-user nil)
+        (current-port nil)
         (current-key nil))
     (with-temp-buffer
       (insert-file-contents (expand-file-name config-file))
@@ -221,12 +237,14 @@ Skips wildcard patterns like Host * or Host *.example.com."
             (let* ((addr (or current-hostname current-host))
                    (address (if current-user (format "%s@%s" current-user addr) addr))
                    (key-name (when current-key
-                               (file-name-nondirectory current-key))))
-              (push (list current-host address "Imported from SSH config" key-name) hosts)))
+                               (file-name-nondirectory current-key)))
+                   (port current-port))
+              (push (list current-host address port "Imported from SSH config" key-name) hosts)))
           ;; Start new host
           (setq current-host (string-trim (match-string 1))
                 current-hostname nil
                 current-user nil
+                current-port nil
                 current-key nil))
          ;; Match HostName
          ((looking-at "^[[:space:]]+HostName[[:space:]]+\\([^#\n]+\\)")
@@ -234,6 +252,9 @@ Skips wildcard patterns like Host * or Host *.example.com."
          ;; Match User
          ((looking-at "^[[:space:]]+User[[:space:]]+\\([^#\n]+\\)")
           (setq current-user (string-trim (match-string 1))))
+        ;; Match Port
+         ((looking-at "^[[:space:]]+Port[[:space:]]+\\([^#\n]+\\)")
+          (setq current-port (string-trim (match-string 1))))
          ;; Match IdentityFile (use first one only)
          ((and (not current-key)
                (looking-at "^[[:space:]]+IdentityFile[[:space:]]+\\([^#\n]+\\)"))
@@ -243,9 +264,10 @@ Skips wildcard patterns like Host * or Host *.example.com."
       (when (and current-host (not (string-match-p "[*?]" current-host)))
         (let* ((addr (or current-hostname current-host))
                (address (if current-user (format "%s@%s" current-user addr) addr))
+               (port current-port)
                (key-name (when current-key
                            (file-name-nondirectory current-key))))
-          (push (list current-host address "Imported from SSH config" key-name) hosts))))
+          (push (list current-host address (validate-port port) "Imported from SSH config" key-name) hosts))))
     (nreverse hosts)))
 
 (defun import-from-ssh-config ()
@@ -284,17 +306,19 @@ destination path."
 	 (selected-name (completing-read "Select target machine: " machine-names))
 	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
-      (pcase-let ((`(,_ ,address ,_) machine-info))
+      (pcase-let ((`(,_ ,address ,port ,_) machine-info))
 	(let ((remote-path (read-string "Remote destination path: ")))
 	  (cl-case ssh-copy-method
 	    (scp
-	     (shell-command (format "scp %s %s:%s"
+	     (shell-command (format "scp -P %s %s %s:%s"
+                                    (validate-port port)
 				    (shell-quote-argument file-path)
 				    address
 				    (shell-quote-argument remote-path)))
-	     (message "File %s copied to %s:%s" file-path address remote-path))
+	     (message "File %s copied to %s:%s using port %s" file-path address remote-path port))
 	    (rsync
-	     (shell-command (format "rsync %s %s:%s"
+	     (shell-command (format "rsync -e 'ssh -p %s' %s %s:%s"
+                                   (validate-port port)
 				    (shell-quote-argument file-path)
 				    address
 				    (shell-quote-argument remote-path)))
@@ -371,11 +395,11 @@ Use \='ssh-copy-id\=' internally."
 	 (selected-name (completing-read "Select target machine: " machine-names))
 	 (machine-info (assoc selected-name (multisession-value ssh-machines-list))))
     (when machine-info
-      (pcase-let ((`(,_ ,address ,_) machine-info))
+      (pcase-let ((`(,_ ,address ,port ,_) machine-info))
 	(let ((key-path (expand-file-name (concat key-file ".pub") ssh-keys-directory)))
 	  (if (file-exists-p key-path)
 	      (async-shell-command
-	       (format "ssh-copy-id -i %s %s" (shell-quote-argument key-path) address)
+	       (format "ssh-copy-id -p %s -i %s %s" (validate-port port) (shell-quote-argument key-path) address)
 	       "*SSH Copy ID*")
 	    (user-error "Public key file %s does not exist" key-path)))))))
 
@@ -396,6 +420,7 @@ Use \='ssh-copy-id\=' internally."
 	     (updated-machine (list (car machine-info)
 				    (cadr machine-info)
 				    (caddr machine-info)
+				    (cadddr machine-info)
 				    selected-key))
 	     (updated-list (mapcar (lambda (m)
 				     (if (string= (car m) selected-name)
